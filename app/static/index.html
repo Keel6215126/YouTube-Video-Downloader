@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Download the best available YouTube quality up to 1080p and 60 FPS.">
+    <title>FrameGrab — YouTube Downloader</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+    <div class="background-orb orb-one" aria-hidden="true"></div>
+    <div class="background-orb orb-two" aria-hidden="true"></div>
+
+    <main class="shell">
+        <header class="brand">
+            <div class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" role="img">
+                    <path d="M8 5.5h16a4.5 4.5 0 0 1 4.5 4.5v12A4.5 4.5 0 0 1 24 26.5H8A4.5 4.5 0 0 1 3.5 22V10A4.5 4.5 0 0 1 8 5.5Z"/>
+                    <path class="play" d="m13 11 8 5-8 5V11Z"/>
+                </svg>
+            </div>
+            <div>
+                <p class="eyebrow">Railway-ready</p>
+                <h1>FrameGrab</h1>
+            </div>
+        </header>
+
+        <section class="hero" aria-labelledby="hero-title">
+            <div class="hero-copy">
+                <p class="badge">
+                    <span class="status-dot"></span>
+                    Best available quality
+                </p>
+                <h2 id="hero-title">Download YouTube videos at up to <span>1080p60</span>.</h2>
+                <p class="subtitle">
+                    Paste a YouTube link. FrameGrab selects the highest source quality no greater than
+                    1080p and 60 FPS, merges the audio, and gives you the finished file.
+                </p>
+            </div>
+
+            <form id="download-form" class="download-card" novalidate>
+                <label for="youtube-url">YouTube URL</label>
+                <div class="input-row">
+                    <input
+                        id="youtube-url"
+                        name="url"
+                        type="url"
+                        inputmode="url"
+                        autocomplete="url"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        required
+                    >
+                    <button id="paste-button" class="secondary-button" type="button">Paste</button>
+                </div>
+
+                <div id="password-group" class="password-group" hidden>
+                    <label for="app-password">App password</label>
+                    <input
+                        id="app-password"
+                        name="password"
+                        type="password"
+                        autocomplete="current-password"
+                        placeholder="Enter the Railway app password"
+                    >
+                </div>
+
+                <button id="submit-button" class="primary-button" type="submit">
+                    <span class="button-label">Prepare download</span>
+                    <span class="button-arrow" aria-hidden="true">→</span>
+                </button>
+
+                <p class="form-note">
+                    Single videos only. No upscaling, frame interpolation, or playlist downloading.
+                </p>
+            </form>
+        </section>
+
+        <section id="job-panel" class="job-panel" hidden aria-live="polite">
+            <div class="job-topline">
+                <div>
+                    <p id="job-stage" class="eyebrow">Queued</p>
+                    <h3 id="job-title">Preparing your video…</h3>
+                </div>
+                <span id="quality-pill" class="quality-pill" hidden></span>
+            </div>
+
+            <div class="progress-track" aria-label="Download progress">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+
+            <div class="progress-meta">
+                <span id="progress-percent">0%</span>
+                <span id="progress-detail">Waiting for a download slot…</span>
+            </div>
+
+            <div id="video-meta" class="video-meta" hidden>
+                <div>
+                    <span class="meta-label">Channel</span>
+                    <strong id="uploader-value">—</strong>
+                </div>
+                <div>
+                    <span class="meta-label">Duration</span>
+                    <strong id="duration-value">—</strong>
+                </div>
+                <div>
+                    <span class="meta-label">File size</span>
+                    <strong id="size-value">—</strong>
+                </div>
+            </div>
+
+            <a id="download-link" class="download-link" href="#" hidden>
+                <span>Download finished video</span>
+                <span aria-hidden="true">↓</span>
+            </a>
+
+            <button id="another-button" class="text-button" type="button" hidden>
+                Download another video
+            </button>
+        </section>
+
+        <section class="feature-grid" aria-label="Downloader behavior">
+            <article>
+                <span class="feature-number">01</span>
+                <h3>Source quality first</h3>
+                <p>Downloads the best format at or below 1080p and 60 FPS.</p>
+            </article>
+            <article>
+                <span class="feature-number">02</span>
+                <h3>Automatic merging</h3>
+                <p>FFmpeg combines YouTube's separate video and audio streams.</p>
+            </article>
+            <article>
+                <span class="feature-number">03</span>
+                <h3>Temporary storage</h3>
+                <p>Completed files expire automatically instead of piling up on the server.</p>
+            </article>
+        </section>
+
+        <footer>
+            <p>Download only videos you own or have permission to save.</p>
+        </footer>
+    </main>
+
+    <script src="/assets/app.js" defer></script>
+</body>
+</html>
