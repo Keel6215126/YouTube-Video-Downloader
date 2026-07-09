@@ -14,11 +14,19 @@ The app prefers MP4/H.264 video plus M4A audio when YouTube offers that
 combination, then falls back to the best compatible source formats. FFmpeg
 merges separate video and audio streams.
 
+By default, the website packages the result as a collection-ready ZIP. The ZIP
+contains a top-level folder named after the video, with the downloaded video
+inside that folder. Neither the direct file nor the ZIP contents include the YouTube video ID. The option can be disabled for a direct video download,
+and the browser remembers the selected setting with local storage.
+
 ## Included
 
 - Railway-compatible `Dockerfile`
 - `railway.json` health check configuration
 - Responsive one-page interface
+- Default-on collection ZIP option remembered by the browser
+- Clean filenames with no trailing YouTube video ID
+- ZIP layout: `Video Name.zip` → `Video Name/Video Name.mp4`
 - Download progress polling
 - YouTube-only URL validation
 - Single-video mode; playlists are disabled

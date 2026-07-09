@@ -239,25 +239,123 @@ input:focus {
     margin-top: 17px;
 }
 
-.option-card {
-    display: flex !important;
-    gap: 13px;
-    align-items: flex-start;
+.collection-option {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: center;
     margin: 18px 0 0 !important;
-    padding: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.035);
+    padding: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 16px;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.045), transparent 58%),
+        rgba(4, 6, 11, 0.45);
     cursor: pointer;
     user-select: none;
+    transition:
+        border-color 180ms ease,
+        background 180ms ease,
+        box-shadow 180ms ease,
+        transform 180ms ease;
 }
 
-.option-control {
+.collection-option::before {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, rgba(255, 63, 95, 0.10), transparent 44%);
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+}
+
+.collection-option:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.065), transparent 58%),
+        rgba(7, 9, 15, 0.72);
+    transform: translateY(-1px);
+}
+
+.collection-option:has(input:checked) {
+    border-color: rgba(255, 102, 128, 0.34);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 12px 30px rgba(255, 63, 95, 0.07);
+}
+
+.collection-option:has(input:checked)::before {
+    opacity: 1;
+}
+
+.collection-badge {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: 45px;
+    height: 45px;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 13px;
+    color: var(--muted-strong);
+    background: rgba(255, 255, 255, 0.055);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    font-size: 0.67rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    transition:
+        color 180ms ease,
+        border-color 180ms ease,
+        background 180ms ease;
+}
+
+.collection-option:has(input:checked) .collection-badge {
+    border-color: rgba(255, 102, 128, 0.28);
+    color: #ffd8df;
+    background: linear-gradient(145deg, rgba(255, 63, 95, 0.28), rgba(255, 63, 95, 0.10));
+}
+
+.collection-copy {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+}
+
+.collection-copy strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text);
+    font-size: 0.86rem;
+    letter-spacing: -0.01em;
+}
+
+.collection-copy > span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.73rem;
+    line-height: 1.48;
+}
+
+.collection-copy .collection-path {
+    margin-top: 7px;
+    overflow: hidden;
+    color: #858c9c;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.66rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.toggle-control {
+    position: relative;
+    z-index: 1;
     flex: 0 0 auto;
-    padding-top: 2px;
 }
 
-.option-control input {
+.toggle-control input {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -265,65 +363,51 @@ input:focus {
     pointer-events: none;
 }
 
-.option-switch {
+.toggle-track {
     position: relative;
     display: block;
-    width: 42px;
-    height: 24px;
-    border: 1px solid var(--border);
+    width: 48px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.08);
-    transition: background 160ms ease, border-color 160ms ease;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.18);
+    transition:
+        background 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease;
 }
 
-.option-switch::after {
+.toggle-track::after {
     position: absolute;
     top: 3px;
     left: 3px;
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border-radius: 999px;
-    background: #d7dae2;
+    background: #d8dbe3;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
     content: "";
-    transition: transform 160ms ease, background 160ms ease;
+    transition:
+        transform 180ms cubic-bezier(0.2, 0.85, 0.3, 1.2),
+        background 180ms ease;
 }
 
-.option-control input:checked + .option-switch {
-    border-color: rgba(255, 102, 128, 0.5);
-    background: var(--accent);
+.toggle-control input:checked + .toggle-track {
+    border-color: rgba(255, 102, 128, 0.58);
+    background: linear-gradient(135deg, #ff3154, #f45d78);
+    box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.18),
+        0 0 0 3px rgba(255, 63, 95, 0.07);
 }
 
-.option-control input:checked + .option-switch::after {
-    background: white;
-    transform: translateX(18px);
+.toggle-control input:checked + .toggle-track::after {
+    background: #fff;
+    transform: translateX(20px);
 }
 
-.option-control input:focus-visible + .option-switch {
-    box-shadow: 0 0 0 4px rgba(255, 63, 95, 0.12);
-}
-
-.option-copy {
-    min-width: 0;
-}
-
-.option-copy strong {
-    display: block;
-    margin-bottom: 4px;
-    color: var(--text);
-    font-size: 0.84rem;
-}
-
-.option-copy > span {
-    display: block;
-    color: var(--muted);
-    font-size: 0.74rem;
-    font-style: normal;
-    line-height: 1.5;
-}
-
-.option-copy em {
-    color: var(--muted-strong);
-    font-style: normal;
+.toggle-control input:focus-visible + .toggle-track {
+    box-shadow: 0 0 0 4px rgba(255, 63, 95, 0.15);
 }
 
 .secondary-button,

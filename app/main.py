@@ -434,7 +434,7 @@ def download_job(job_id: str) -> None:
 
         return None
 
-    output_template = str(job_dir / "%(title).180B [%(id)s].%(ext)s")
+    output_template = str(job_dir / "%(title).180B.%(ext)s")
 
     options: dict[str, Any] = {
         "format": (
