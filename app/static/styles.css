@@ -239,6 +239,93 @@ input:focus {
     margin-top: 17px;
 }
 
+.option-card {
+    display: flex !important;
+    gap: 13px;
+    align-items: flex-start;
+    margin: 18px 0 0 !important;
+    padding: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.035);
+    cursor: pointer;
+    user-select: none;
+}
+
+.option-control {
+    flex: 0 0 auto;
+    padding-top: 2px;
+}
+
+.option-control input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.option-switch {
+    position: relative;
+    display: block;
+    width: 42px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    transition: background 160ms ease, border-color 160ms ease;
+}
+
+.option-switch::after {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #d7dae2;
+    content: "";
+    transition: transform 160ms ease, background 160ms ease;
+}
+
+.option-control input:checked + .option-switch {
+    border-color: rgba(255, 102, 128, 0.5);
+    background: var(--accent);
+}
+
+.option-control input:checked + .option-switch::after {
+    background: white;
+    transform: translateX(18px);
+}
+
+.option-control input:focus-visible + .option-switch {
+    box-shadow: 0 0 0 4px rgba(255, 63, 95, 0.12);
+}
+
+.option-copy {
+    min-width: 0;
+}
+
+.option-copy strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text);
+    font-size: 0.84rem;
+}
+
+.option-copy > span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.74rem;
+    font-style: normal;
+    line-height: 1.5;
+}
+
+.option-copy em {
+    color: var(--muted-strong);
+    font-style: normal;
+}
+
 .secondary-button,
 .primary-button,
 .text-button {

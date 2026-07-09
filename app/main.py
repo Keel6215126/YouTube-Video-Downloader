@@ -10,6 +10,7 @@ import secrets
 import shutil
 import tempfile
 import threading
+import zipfile
 import time
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
@@ -83,6 +84,8 @@ class Job:
     filename: str | None = None
     file_size: int | None = None
     file_path: str | None = None
+    package_as_zip: bool = True
+    is_archive: bool = False
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -90,6 +93,7 @@ class Job:
 
 class CreateJobRequest(BaseModel):
     url: str = Field(min_length=8, max_length=2048)
+    package_as_zip: bool = True
 
 
 jobs: dict[str, Job] = {}
@@ -292,6 +296,45 @@ def find_final_media_file(job_dir: Path) -> Path:
     return max(candidates, key=lambda path: (path.stat().st_mtime, path.stat().st_size))
 
 
+WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{number}" for number in range(1, 10)),
+    *(f"LPT{number}" for number in range(1, 10)),
+}
+
+
+def safe_collection_name(title: str | None, video_id: str | None = None) -> str:
+    name = (title or "YouTube Video").strip()
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)
+    name = re.sub(r"\s+", " ", name).strip(" .")
+
+    if not name:
+        name = "YouTube Video"
+    if name.upper() in WINDOWS_RESERVED_NAMES:
+        name = f"{name}_video"
+
+    name = name[:120].rstrip(" .")
+    if not name:
+        name = f"YouTube Video {video_id or ''}".strip()
+    return name
+
+
+def package_video_as_collection_zip(
+    job_dir: Path,
+    final_file: Path,
+    title: str | None,
+    video_id: str | None,
+) -> Path:
+    folder_name = safe_collection_name(title, video_id)
+    archive_path = job_dir / f"{folder_name}.zip"
+    archive_name = f"{folder_name}/{final_file.name}"
+
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.write(final_file, arcname=archive_name)
+
+    return archive_path
+
+
 class JobLogger:
     def __init__(self, job_id: str) -> None:
         self.job_id = job_id
@@ -323,6 +366,7 @@ def download_job(job_id: str) -> None:
         if not job:
             return
         source_url = job.url
+        package_as_zip = job.package_as_zip
 
     job_dir = Path(
         tempfile.mkdtemp(prefix=f"{job_id}-", dir=str(DOWNLOAD_ROOT))
@@ -445,22 +489,48 @@ def download_job(job_id: str) -> None:
             info = entries[0]
 
         final_file = find_final_media_file(job_dir)
-        stat = final_file.stat()
+        title = info.get("title") or final_file.stem
+        downloadable_file = final_file
+        is_archive = False
+
+        if package_as_zip:
+            update_job(
+                job_id,
+                status="processing",
+                progress=99.0,
+                message="Creating a collection ZIP with a named folder…",
+                speed=None,
+                eta=None,
+            )
+            downloadable_file = package_video_as_collection_zip(
+                job_dir=job_dir,
+                final_file=final_file,
+                title=title,
+                video_id=info.get("id"),
+            )
+            is_archive = True
+
+        stat = downloadable_file.stat()
 
         update_job(
             job_id,
             status="complete",
             progress=100.0,
-            message="Ready to download.",
-            title=info.get("title") or final_file.stem,
+            message=(
+                "Collection ZIP ready to download."
+                if is_archive
+                else "Video ready to download."
+            ),
+            title=title,
             uploader=info.get("uploader") or info.get("channel"),
             duration=info.get("duration"),
             quality=quality_label(info),
             speed=None,
             eta=None,
-            filename=final_file.name,
+            filename=downloadable_file.name,
             file_size=stat.st_size,
-            file_path=str(final_file),
+            file_path=str(downloadable_file),
+            is_archive=is_archive,
             error=None,
         )
 
@@ -547,7 +617,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Railway YouTube Downloader",
     description="Downloads the best available YouTube quality up to 1080p and 60 FPS.",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -598,6 +668,7 @@ async def create_job(payload: CreateJobRequest, request: Request) -> dict[str, A
         id=job_id,
         url=url,
         token=secrets.token_urlsafe(24),
+        package_as_zip=payload.package_as_zip,
     )
 
     with jobs_lock:

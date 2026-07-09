@@ -3,6 +3,7 @@ const urlInput = document.querySelector("#youtube-url");
 const passwordGroup = document.querySelector("#password-group");
 const passwordInput = document.querySelector("#app-password");
 const pasteButton = document.querySelector("#paste-button");
+const collectionZipInput = document.querySelector("#collection-zip");
 const submitButton = document.querySelector("#submit-button");
 const submitLabel = submitButton.querySelector(".button-label");
 
@@ -18,6 +19,7 @@ const uploaderValue = document.querySelector("#uploader-value");
 const durationValue = document.querySelector("#duration-value");
 const sizeValue = document.querySelector("#size-value");
 const downloadLink = document.querySelector("#download-link");
+const downloadLinkLabel = document.querySelector("#download-link-label");
 const anotherButton = document.querySelector("#another-button");
 
 let authRequired = false;
@@ -130,6 +132,9 @@ function renderJob(job) {
 
         downloadLink.href = job.download_url;
         downloadLink.setAttribute("download", job.filename || "");
+        downloadLinkLabel.textContent = job.is_archive
+            ? "Download collection ZIP"
+            : "Download finished video";
         downloadLink.hidden = false;
         anotherButton.hidden = false;
         jobPanel.classList.remove("error");
@@ -196,7 +201,7 @@ async function pollJob() {
     }
 }
 
-async function startDownload(url) {
+async function startDownload(url, packageAsZip) {
     setBusy(true);
     resetPanel();
     showPanel();
@@ -204,7 +209,10 @@ async function startDownload(url) {
     const response = await fetch("/api/jobs", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({
+            url,
+            package_as_zip: packageAsZip,
+        }),
     });
 
     if (!response.ok) {
@@ -217,6 +225,10 @@ async function startDownload(url) {
     if (authRequired) {
         localStorage.setItem("framegrab-password", passwordInput.value);
     }
+    localStorage.setItem(
+        "framegrab-package-as-zip",
+        packageAsZip ? "true" : "false",
+    );
 
     renderJob(job);
     await pollJob();
@@ -237,7 +249,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     try {
-        await startDownload(url);
+        await startDownload(url, collectionZipInput.checked);
     } catch (error) {
         jobPanel.classList.add("error");
         jobStage.textContent = "Could not start";
@@ -280,6 +292,11 @@ async function initialize() {
         const config = await response.json();
         authRequired = Boolean(config.auth_required);
         passwordGroup.hidden = !authRequired;
+
+        const savedZipPreference = localStorage.getItem("framegrab-package-as-zip");
+        collectionZipInput.checked = savedZipPreference === null
+            ? true
+            : savedZipPreference === "true";
 
         if (authRequired) {
             passwordInput.value = localStorage.getItem("framegrab-password") || "";

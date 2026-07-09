@@ -65,6 +65,17 @@
                     >
                 </div>
 
+                <label class="option-card" for="collection-zip">
+                    <span class="option-control">
+                        <input id="collection-zip" type="checkbox" checked>
+                        <span class="option-switch" aria-hidden="true"></span>
+                    </span>
+                    <span class="option-copy">
+                        <strong>Package as a collection ZIP</strong>
+                        <span>Creates <em>Video Name.zip</em> containing <em>Video Name/video file.mp4</em>. Remembered by this browser.</span>
+                    </span>
+                </label>
+
                 <button id="submit-button" class="primary-button" type="submit">
                     <span class="button-label">Prepare download</span>
                     <span class="button-arrow" aria-hidden="true">→</span>
@@ -110,7 +121,7 @@
             </div>
 
             <a id="download-link" class="download-link" href="#" hidden>
-                <span>Download finished video</span>
+                <span id="download-link-label">Download collection ZIP</span>
                 <span aria-hidden="true">↓</span>
             </a>
 
@@ -132,8 +143,8 @@
             </article>
             <article>
                 <span class="feature-number">03</span>
-                <h3>Temporary storage</h3>
-                <p>Completed files expire automatically instead of piling up on the server.</p>
+                <h3>Collection-ready ZIPs</h3>
+                <p>Optionally wraps each video in a folder named after the video, then downloads it as a ZIP.</p>
             </article>
         </section>
 
