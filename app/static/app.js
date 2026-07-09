@@ -27,6 +27,8 @@ const sizeValue = document.querySelector("#size-value");
 const downloadLink = document.querySelector("#download-link");
 const downloadLinkLabel = document.querySelector("#download-link-label");
 const anotherButton = document.querySelector("#another-button");
+const poTokenStatus = document.querySelector("#po-token-status");
+const poTokenStatusText = document.querySelector("#po-token-status-text");
 
 let authRequired = false;
 let packageAsZip = true;
@@ -424,6 +426,27 @@ async function initialize() {
         const config = await response.json();
         authRequired = Boolean(config.auth_required);
         passwordGroup.hidden = !authRequired;
+
+        const poTokenProvider = config.po_token_provider || {};
+        if (poTokenProvider.ready) {
+            poTokenStatus.className = "protection-status ready";
+            poTokenStatusText.textContent =
+                "Automatic PO-token protection is active on this server.";
+            cookieSummaryText.textContent =
+                "Automatic protection active; cookies only as a fallback";
+        } else if (poTokenProvider.enabled) {
+            poTokenStatus.className = "protection-status unavailable";
+            poTokenStatusText.textContent =
+                "Automatic protection did not start. Cookies may be required.";
+            cookieSummaryText.textContent =
+                "Automatic protection unavailable; cookies may be required";
+        } else {
+            poTokenStatus.className = "protection-status unavailable";
+            poTokenStatusText.textContent =
+                "Automatic PO-token protection is disabled.";
+            cookieSummaryText.textContent =
+                "Automatic protection disabled; cookies may be required";
+        }
         maxCookieFileBytes = Number(config.max_cookie_file_bytes) || maxCookieFileBytes;
 
         if (authRequired) {

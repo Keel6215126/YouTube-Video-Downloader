@@ -428,6 +428,53 @@ input[type="password"]:focus {
     transform: rotate(180deg);
 }
 
+
+
+.protection-status {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 13px;
+    padding: 10px 11px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 11px;
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.035);
+    font-size: 0.72rem;
+    line-height: 1.4;
+}
+
+.protection-dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #f3bf61;
+    box-shadow: 0 0 0 4px rgba(243, 191, 97, 0.09);
+}
+
+.protection-status.ready {
+    border-color: rgba(100, 230, 173, 0.16);
+    color: #b8f5d8;
+    background: rgba(100, 230, 173, 0.055);
+}
+
+.protection-status.ready .protection-dot {
+    background: var(--success);
+    box-shadow: 0 0 0 4px rgba(100, 230, 173, 0.09);
+}
+
+.protection-status.unavailable {
+    border-color: rgba(255, 123, 145, 0.18);
+    color: #ffc1cc;
+    background: rgba(255, 123, 145, 0.055);
+}
+
+.protection-status.unavailable .protection-dot {
+    background: var(--danger);
+    box-shadow: 0 0 0 4px rgba(255, 123, 145, 0.08);
+}
+
 .cookie-body {
     padding: 0 15px 16px 68px;
 }

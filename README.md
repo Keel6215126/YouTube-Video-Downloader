@@ -1,6 +1,6 @@
 # FrameGrab — Railway YouTube Downloader
 
-A Dockerized FastAPI website, with Deno support for current YouTube extraction, that downloads the highest available YouTube
+A Dockerized FastAPI website with Deno, automatic YouTube PO-token generation, that downloads the highest available YouTube
 quality at or below **1080p and 60 FPS**.
 
 It does not upscale resolution or generate frames. Examples:
@@ -34,7 +34,12 @@ and the browser remembers the selected setting with local storage.
 - Optional password protection
 - Per-IP rate limiting
 - Configurable queue, concurrency, duration, and expiry limits
-- Optional Netscape `cookies.txt` support through an environment variable
+- Optional per-download `cookies.txt` upload for YouTube bot checks
+- Optional server-wide Netscape cookies through `YOUTUBE_COOKIES_B64`
+- AdSense ownership code and `/ads.txt` for publisher `pub-4820082513371524`
+- Cache-busted CSS/JavaScript so Railway deployments do not mix interface versions
+- Compact custom Collection ZIP switch with no native browser checkbox
+- Three optional responsive AdSense placements: header, middle, and footer
 
 ## Deploy to Railway
 
@@ -60,20 +65,32 @@ Railway automatically detects the root `Dockerfile`. The included
 | Variable | Default | Purpose |
 |---|---:|---|
 | `APP_PASSWORD` | empty | Protects the downloader when set |
-| `MAX_CONCURRENT_DOWNLOADS` | `2` | Simultaneous yt-dlp workers |
+| `MAX_CONCURRENT_DOWNLOADS` | `1` | Simultaneous yt-dlp workers |
 | `MAX_QUEUED_JOBS` | `10` | Queued and active jobs accepted |
 | `MAX_JOBS_PER_HOUR` | `20` | Starts allowed per IP per hour |
 | `MAX_DURATION_SECONDS` | `14400` | Maximum video duration |
 | `COMPLETED_JOB_TTL_SECONDS` | `1800` | Finished-file lifetime |
 | `FAILED_JOB_TTL_SECONDS` | `900` | Failed-job status lifetime |
 | `ACTIVE_JOB_TIMEOUT_SECONDS` | `21600` | Maximum active-job age |
-| `YOUTUBE_COOKIES_B64` | empty | Optional base64 cookies file |
+| `YOUTUBE_COOKIES_B64` | empty | Optional server-wide base64 cookies file |
+| `MAX_COOKIE_FILE_BYTES` | `2097152` | Per-download cookies upload size limit |
+| `ADSENSE_CLIENT_ID` | `ca-pub-4820082513371524` | AdSense publisher client ID |
+| `ADSENSE_HEADER_SLOT` | empty | Responsive ad unit below the header |
+| `ADSENSE_MIDDLE_SLOT` | empty | Responsive ad unit below the downloader |
+| `ADSENSE_FOOTER_SLOT` | empty | Responsive ad unit above the footer |
 
-## Optional YouTube cookies
+## YouTube cookies and bot checks
 
-Cloud-hosting IP addresses are sometimes challenged by YouTube. For videos
-that require an account, export a Netscape-format `cookies.txt` file from a
-browser profile that is allowed to view the video.
+Cloud-hosting IP addresses are sometimes challenged by YouTube. The website
+now has a **YouTube authentication** panel directly under the Collection ZIP
+option. Export a fresh Netscape-format `cookies.txt` file from a browser where
+YouTube plays normally and attach it to the download. The upload is used only
+for that job and deleted immediately after the job succeeds or fails.
+
+Railway cannot use `--cookies-from-browser` to read Chrome or Firefox on your
+personal computer because Railway runs on a separate remote machine.
+
+For a persistent server-wide cookie file, convert `cookies.txt` to base64:
 
 Convert it to one base64 line locally:
 
@@ -96,7 +113,35 @@ Add the resulting value to Railway as:
 YOUTUBE_COOKIES_B64=PASTE_THE_BASE64_VALUE
 ```
 
-Treat this value like a password. Do not commit it to GitHub.
+Treat this value like a password. Do not commit it to GitHub. Fresh browser
+exports may occasionally be required because YouTube rotates or invalidates
+account cookies.
+
+## AdSense verification and ad placements
+
+The AdSense loader and account meta tag for `ca-pub-4820082513371524` are
+included inside the page `<head>`. The site also serves this authorized-seller
+record at `/ads.txt`:
+
+```text
+google.com, pub-4820082513371524, DIRECT, f08c47fec0942fa0
+```
+
+The layout contains three responsive manual ad locations. Create responsive
+**Display ad** units in AdSense, then copy only the numeric `data-ad-slot` value
+from each generated unit into Railway:
+
+```text
+ADSENSE_HEADER_SLOT=1234567890
+ADSENSE_MIDDLE_SLOT=2345678901
+ADSENSE_FOOTER_SLOT=3456789012
+```
+
+A location remains completely hidden when its slot variable is blank. If an ad
+unit reports itself as unfilled, the wrapper is hidden automatically. You can
+also enable Auto ads in AdSense; the verification loader is already installed.
+AdSense review and ad delivery are controlled by Google and are not guaranteed
+by the code alone.
 
 ## Run locally with Docker
 

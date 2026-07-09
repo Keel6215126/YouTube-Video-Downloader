@@ -7,7 +7,7 @@
     <meta name="description" content="Download the best available YouTube quality up to 1080p and 60 FPS.">
     <meta name="google-adsense-account" content="ca-pub-4820082513371524">
     <title>FrameGrab — YouTube Downloader</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=1.4.0">
+    <link rel="stylesheet" href="/assets/styles.css?v=1.5.0">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4820082513371524" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -115,12 +115,16 @@
                             </span>
                             <span class="setting-copy">
                                 <strong>YouTube authentication</strong>
-                                <span id="cookie-summary-text">Only needed for “confirm you’re not a bot” errors</span>
+                                <span id="cookie-summary-text">Automatic protection first; cookies only as a fallback</span>
                             </span>
                             <span class="details-chevron" aria-hidden="true">⌄</span>
                         </summary>
 
                         <div class="cookie-body">
+                            <div id="po-token-status" class="protection-status checking">
+                                <span class="protection-dot" aria-hidden="true"></span>
+                                <span id="po-token-status-text">Checking automatic YouTube protection…</span>
+                            </div>
                             <p>
                                 Railway cannot read Chrome or Firefox on your computer. Export a fresh
                                 Netscape-format <code>cookies.txt</code> from a browser where YouTube works,
@@ -236,6 +240,6 @@
         </footer>
     </main>
 
-    <script src="/assets/app.js?v=1.4.0" defer></script>
+    <script src="/assets/app.js?v=1.5.0" defer></script>
 </body>
 </html>

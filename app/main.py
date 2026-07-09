@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import shutil
+import subprocess
 import tempfile
 import threading
 import zipfile
@@ -19,6 +20,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from urllib.request import urlopen
 
 import yt_dlp
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -35,7 +37,7 @@ DOWNLOAD_ROOT = Path(
 ).resolve()
 
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
-MAX_CONCURRENT_DOWNLOADS = max(1, int(os.getenv("MAX_CONCURRENT_DOWNLOADS", "2")))
+MAX_CONCURRENT_DOWNLOADS = max(1, int(os.getenv("MAX_CONCURRENT_DOWNLOADS", "1")))
 MAX_QUEUED_JOBS = max(1, int(os.getenv("MAX_QUEUED_JOBS", "10")))
 MAX_JOBS_PER_HOUR = max(1, int(os.getenv("MAX_JOBS_PER_HOUR", "20")))
 MAX_DURATION_SECONDS = max(60, int(os.getenv("MAX_DURATION_SECONDS", "14400")))
@@ -58,6 +60,25 @@ ADSENSE_CLIENT_ID = os.getenv(
 ADSENSE_HEADER_SLOT = os.getenv("ADSENSE_HEADER_SLOT", "").strip()
 ADSENSE_MIDDLE_SLOT = os.getenv("ADSENSE_MIDDLE_SLOT", "").strip()
 ADSENSE_FOOTER_SLOT = os.getenv("ADSENSE_FOOTER_SLOT", "").strip()
+
+PO_TOKEN_PROVIDER_ENABLED = os.getenv(
+    "ENABLE_PO_TOKEN_PROVIDER", "true"
+).strip().lower() not in {"0", "false", "no", "off"}
+POT_PROVIDER_URL = os.getenv(
+    "POT_PROVIDER_URL", "http://127.0.0.1:4416"
+).strip().rstrip("/")
+POT_PROVIDER_HOME = Path(
+    os.getenv("POT_PROVIDER_HOME", "/opt/bgutil-provider")
+).resolve()
+POT_PROVIDER_STARTUP_TIMEOUT_SECONDS = max(
+    3.0, float(os.getenv("POT_PROVIDER_STARTUP_TIMEOUT_SECONDS", "30"))
+)
+YOUTUBE_SLEEP_REQUESTS_SECONDS = max(
+    0.0, float(os.getenv("YOUTUBE_SLEEP_REQUESTS_SECONDS", "1"))
+)
+YOUTUBE_JOB_SPACING_SECONDS = max(
+    0.0, float(os.getenv("YOUTUBE_JOB_SPACING_SECONDS", "6"))
+)
 
 ALLOWED_YOUTUBE_HOSTS = {
     "youtube.com",
@@ -96,6 +117,7 @@ class Job:
     cookie_file_path: str | None = None
     package_as_zip: bool = True
     is_archive: bool = False
+    auth_mode: str | None = None
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -114,6 +136,131 @@ executor = ThreadPoolExecutor(
     max_workers=MAX_CONCURRENT_DOWNLOADS,
     thread_name_prefix="youtube-download",
 )
+
+pot_provider_process: subprocess.Popen[bytes] | None = None
+pot_provider_ready = False
+pot_provider_error: str | None = None
+youtube_spacing_lock = threading.Lock()
+last_youtube_job_started_at = 0.0
+
+
+def pot_provider_ping() -> bool:
+    try:
+        with urlopen(f"{POT_PROVIDER_URL}/ping", timeout=2.5) as response:
+            return 200 <= response.status < 300
+    except Exception:
+        return False
+
+
+def start_pot_provider() -> None:
+    global pot_provider_process, pot_provider_ready, pot_provider_error
+
+    pot_provider_ready = False
+    pot_provider_error = None
+
+    if not PO_TOKEN_PROVIDER_ENABLED:
+        pot_provider_error = "Disabled by ENABLE_PO_TOKEN_PROVIDER."
+        return
+
+    if pot_provider_ping():
+        pot_provider_ready = True
+        return
+
+    parsed_url = urlparse(POT_PROVIDER_URL)
+    local_hosts = {"127.0.0.1", "localhost", "::1"}
+    if (parsed_url.hostname or "").lower() not in local_hosts:
+        pot_provider_error = (
+            f"The external PO-token provider at {POT_PROVIDER_URL} did not answer /ping."
+        )
+        return
+
+    source_file = POT_PROVIDER_HOME / "src/main.ts"
+    node_modules = POT_PROVIDER_HOME / "node_modules"
+    if not source_file.is_file() or not node_modules.is_dir():
+        pot_provider_error = (
+            f"PO-token provider files were not found under {POT_PROVIDER_HOME}."
+        )
+        return
+
+    port = parsed_url.port or 4416
+    log_path = DOWNLOAD_ROOT / "pot-provider.log"
+    command = [
+        "deno",
+        "run",
+        "--allow-env",
+        "--allow-net",
+        f"--allow-ffi={node_modules}",
+        f"--allow-read={node_modules}",
+        str(source_file),
+        "--port",
+        str(port),
+    ]
+
+    try:
+        with log_path.open("ab", buffering=0) as log_file:
+            pot_provider_process = subprocess.Popen(
+                command,
+                cwd=POT_PROVIDER_HOME,
+                stdin=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+    except Exception as exc:
+        pot_provider_error = f"Could not start the PO-token provider: {exc}"
+        return
+
+    deadline = time.monotonic() + POT_PROVIDER_STARTUP_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        if pot_provider_process.poll() is not None:
+            pot_provider_error = (
+                f"The PO-token provider exited with code {pot_provider_process.returncode}."
+            )
+            return
+        if pot_provider_ping():
+            pot_provider_ready = True
+            return
+        time.sleep(0.25)
+
+    pot_provider_error = "The PO-token provider did not become ready before timeout."
+
+
+def stop_pot_provider() -> None:
+    global pot_provider_process, pot_provider_ready
+
+    process = pot_provider_process
+    pot_provider_process = None
+    pot_provider_ready = False
+
+    if process is None or process.poll() is not None:
+        return
+
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def wait_for_youtube_job_spacing(job_id: str) -> None:
+    global last_youtube_job_started_at
+
+    if YOUTUBE_JOB_SPACING_SECONDS <= 0:
+        return
+
+    with youtube_spacing_lock:
+        elapsed = time.monotonic() - last_youtube_job_started_at
+        delay = max(0.0, YOUTUBE_JOB_SPACING_SECONDS - elapsed)
+        if delay > 0 and last_youtube_job_started_at > 0:
+            update_job(
+                job_id,
+                status="queued",
+                progress=1.0,
+                message=f"Waiting {delay:.1f}s before contacting YouTube…",
+            )
+            time.sleep(delay)
+        last_youtube_job_started_at = time.monotonic()
 
 
 def decode_cookie_file() -> None:
@@ -188,10 +335,16 @@ def authentication_error_message(message: str) -> str:
     cleaned = clean_error_message(message)
     lowered = cleaned.lower()
     if "sign in to confirm" in lowered or "not a bot" in lowered:
+        if pot_provider_ready:
+            return (
+                "Automatic PO-token protection was tried, but YouTube still challenged "
+                "this Railway server. Open YouTube authentication, attach a fresh "
+                "Netscape-format cookies.txt export, and retry."
+            )
         return (
-            "YouTube challenged this Railway server. Open YouTube authentication, "
-            "attach a fresh Netscape-format cookies.txt export, and retry. "
-            "You can also configure YOUTUBE_COOKIES_B64 in Railway for server-wide cookies."
+            "The automatic PO-token provider is unavailable, and YouTube challenged "
+            "this Railway server. Open YouTube authentication, attach a fresh "
+            "Netscape-format cookies.txt export, and retry."
         )
     return cleaned
 
@@ -525,7 +678,8 @@ def download_job(job_id: str) -> None:
         },
         "merge_output_format": "mp4",
         "noplaylist": True,
-        "concurrent_fragment_downloads": 4,
+        "concurrent_fragment_downloads": 1,
+        "sleep_interval_requests": YOUTUBE_SLEEP_REQUESTS_SECONDS,
         "retries": 10,
         "fragment_retries": 10,
         "file_access_retries": 3,
@@ -549,13 +703,43 @@ def download_job(job_id: str) -> None:
         cookie_path = COOKIE_FILE
     if cookie_path is not None:
         options["cookiefile"] = str(cookie_path)
+        auth_mode = "cookies"
+    elif PO_TOKEN_PROVIDER_ENABLED and pot_provider_ready:
+        options["extractor_args"] = {
+            "youtube": {
+                "player_client": ["mweb"],
+            },
+            "youtubepot-bgutilhttp": {
+                "base_url": [POT_PROVIDER_URL],
+            },
+        }
+        auth_mode = "po_token"
+    else:
+        auth_mode = "guest"
+
+    update_job(job_id, auth_mode=auth_mode)
 
     try:
+        wait_for_youtube_job_spacing(job_id)
+
+        if auth_mode == "po_token":
+            analyzing_message = (
+                "Generating automatic YouTube proof token and selecting up to 1080p60…"
+            )
+        elif auth_mode == "cookies":
+            analyzing_message = (
+                "Using YouTube authentication and selecting up to 1080p60…"
+            )
+        else:
+            analyzing_message = (
+                "Checking YouTube as a guest and selecting up to 1080p60…"
+            )
+
         update_job(
             job_id,
             status="analyzing",
             progress=2.0,
-            message="Checking the video and selecting the best quality up to 1080p60…",
+            message=analyzing_message,
         )
 
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -690,6 +874,7 @@ async def cleanup_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     decode_cookie_file()
+    await asyncio.to_thread(start_pot_provider)
     cleanup_task = asyncio.create_task(cleanup_loop())
     try:
         yield
@@ -699,13 +884,14 @@ async def lifespan(_: FastAPI):
             await cleanup_task
         except asyncio.CancelledError:
             pass
+        await asyncio.to_thread(stop_pot_provider)
         executor.shutdown(wait=False, cancel_futures=True)
 
 
 app = FastAPI(
     title="Railway YouTube Downloader",
     description="Downloads the best available YouTube quality up to 1080p and 60 FPS.",
-    version="1.4.0",
+    version="1.5.0",
     lifespan=lifespan,
 )
 
@@ -744,8 +930,15 @@ async def ads_txt() -> FileResponse:
 
 
 @app.get("/health", include_in_schema=False)
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> dict[str, Any]:
+    return {
+        "status": "ok" if (not PO_TOKEN_PROVIDER_ENABLED or pot_provider_ready) else "degraded",
+        "po_token_provider": {
+            "enabled": PO_TOKEN_PROVIDER_ENABLED,
+            "ready": pot_provider_ready,
+            "error": pot_provider_error,
+        },
+    }
 
 
 @app.get("/api/config")
@@ -756,6 +949,11 @@ async def config() -> dict[str, Any]:
         "max_concurrent_downloads": MAX_CONCURRENT_DOWNLOADS,
         "server_cookies_configured": COOKIE_FILE.exists(),
         "max_cookie_file_bytes": MAX_COOKIE_FILE_BYTES,
+        "po_token_provider": {
+            "enabled": PO_TOKEN_PROVIDER_ENABLED,
+            "ready": pot_provider_ready,
+            "error": pot_provider_error,
+        },
         "adsense": {
             "client_id": ADSENSE_CLIENT_ID,
             "slots": {
