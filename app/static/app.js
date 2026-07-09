@@ -3,7 +3,13 @@ const urlInput = document.querySelector("#youtube-url");
 const passwordGroup = document.querySelector("#password-group");
 const passwordInput = document.querySelector("#app-password");
 const pasteButton = document.querySelector("#paste-button");
-const collectionZipInput = document.querySelector("#collection-zip");
+const collectionZipToggle = document.querySelector("#collection-zip-toggle");
+const collectionPreview = document.querySelector("#collection-preview");
+const cookieDetails = document.querySelector("#cookie-details");
+const cookieSummaryText = document.querySelector("#cookie-summary-text");
+const cookieFileInput = document.querySelector("#youtube-cookies-file");
+const cookieFileLabel = document.querySelector("#cookie-file-label");
+const clearCookieFileButton = document.querySelector("#clear-cookie-file");
 const submitButton = document.querySelector("#submit-button");
 const submitLabel = submitButton.querySelector(".button-label");
 
@@ -23,19 +29,45 @@ const downloadLinkLabel = document.querySelector("#download-link-label");
 const anotherButton = document.querySelector("#another-button");
 
 let authRequired = false;
+let packageAsZip = true;
 let currentJobId = null;
 let pollTimer = null;
+let maxCookieFileBytes = 2 * 1024 * 1024;
 
 function authHeaders() {
-    const headers = {
-        "Content-Type": "application/json",
-    };
+    const headers = {};
 
     if (authRequired) {
         headers["X-App-Password"] = passwordInput.value;
     }
 
     return headers;
+}
+
+function safeStorageGet(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function safeStorageSet(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        // Storage can be disabled in private or restricted browser modes.
+    }
+}
+
+function setCollectionZip(enabled, remember = true) {
+    packageAsZip = Boolean(enabled);
+    collectionZipToggle.setAttribute("aria-checked", packageAsZip ? "true" : "false");
+    collectionPreview.classList.toggle("is-disabled", !packageAsZip);
+
+    if (remember) {
+        safeStorageSet("framegrab-package-as-zip", packageAsZip ? "true" : "false");
+    }
 }
 
 function formatDuration(seconds) {
@@ -69,8 +101,7 @@ function formatBytes(bytes) {
         unitIndex += 1;
     }
 
-    const decimals = unitIndex === 0 ? 0 : 1;
-    return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+    return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 function titleCaseStatus(status) {
@@ -140,17 +171,23 @@ function renderJob(job) {
         jobPanel.classList.remove("error");
         stopPolling();
         setBusy(false);
+        resetCookieFile();
     }
 
     if (job.status === "error") {
+        const errorMessage = job.error || "The download failed.";
         jobPanel.classList.add("error");
         jobStage.textContent = "Download failed";
         progressBar.style.width = "100%";
         progressPercent.textContent = "Error";
-        progressDetail.textContent = job.error || "The download failed.";
+        progressDetail.textContent = errorMessage;
         anotherButton.hidden = false;
         stopPolling();
         setBusy(false);
+
+        if (errorMessage.toLowerCase().includes("cookies.txt")) {
+            cookieDetails.open = true;
+        }
     }
 }
 
@@ -201,18 +238,36 @@ async function pollJob() {
     }
 }
 
-async function startDownload(url, packageAsZip) {
+function selectedCookieFile() {
+    return cookieFileInput.files && cookieFileInput.files.length > 0
+        ? cookieFileInput.files[0]
+        : null;
+}
+
+function resetCookieFile() {
+    cookieFileInput.value = "";
+    cookieFileLabel.textContent = "Choose cookies.txt";
+    clearCookieFileButton.hidden = true;
+}
+
+async function startDownload(url) {
     setBusy(true);
     resetPanel();
     showPanel();
 
+    const requestBody = new FormData();
+    requestBody.append("url", url);
+    requestBody.append("package_as_zip", packageAsZip ? "true" : "false");
+
+    const cookiesFile = selectedCookieFile();
+    if (cookiesFile) {
+        requestBody.append("cookies_file", cookiesFile, cookiesFile.name);
+    }
+
     const response = await fetch("/api/jobs", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({
-            url,
-            package_as_zip: packageAsZip,
-        }),
+        body: requestBody,
     });
 
     if (!response.ok) {
@@ -223,15 +278,54 @@ async function startDownload(url, packageAsZip) {
     currentJobId = job.id;
 
     if (authRequired) {
-        localStorage.setItem("framegrab-password", passwordInput.value);
+        safeStorageSet("framegrab-password", passwordInput.value);
     }
-    localStorage.setItem(
-        "framegrab-package-as-zip",
-        packageAsZip ? "true" : "false",
-    );
 
     renderJob(job);
     await pollJob();
+}
+
+function mountAd(placementId, mountId, clientId, slotId) {
+    const placement = document.querySelector(`#${placementId}`);
+    const mount = document.querySelector(`#${mountId}`);
+
+    if (!placement || !mount || !clientId || !slotId) {
+        return;
+    }
+
+    const ad = document.createElement("ins");
+    ad.className = "adsbygoogle";
+    ad.style.display = "block";
+    ad.dataset.adClient = clientId;
+    ad.dataset.adSlot = slotId;
+    ad.dataset.adFormat = "auto";
+    ad.dataset.fullWidthResponsive = "true";
+
+    const observer = new MutationObserver(() => {
+        if (ad.dataset.adStatus === "unfilled") {
+            placement.classList.add("is-unfilled");
+        }
+    });
+    observer.observe(ad, { attributes: true, attributeFilter: ["data-ad-status"] });
+
+    mount.replaceChildren(ad);
+    placement.hidden = false;
+
+    try {
+        window.adsbygoogle = window.adsbygoogle || [];
+        window.adsbygoogle.push({});
+    } catch {
+        placement.hidden = true;
+    }
+}
+
+function initializeAds(adsense) {
+    const clientId = adsense?.client_id || "";
+    const slots = adsense?.slots || {};
+
+    mountAd("ad-placement-header", "ad-header", clientId, slots.header || "");
+    mountAd("ad-placement-middle", "ad-middle", clientId, slots.middle || "");
+    mountAd("ad-placement-footer", "ad-footer", clientId, slots.footer || "");
 }
 
 form.addEventListener("submit", async (event) => {
@@ -248,8 +342,16 @@ form.addEventListener("submit", async (event) => {
         return;
     }
 
+    const cookiesFile = selectedCookieFile();
+    if (cookiesFile && cookiesFile.size > maxCookieFileBytes) {
+        const limitMb = maxCookieFileBytes / (1024 * 1024);
+        cookieDetails.open = true;
+        cookieFileLabel.textContent = `File exceeds ${limitMb.toFixed(1)} MB`;
+        return;
+    }
+
     try {
-        await startDownload(url, collectionZipInput.checked);
+        await startDownload(url);
     } catch (error) {
         jobPanel.classList.add("error");
         jobStage.textContent = "Could not start";
@@ -259,6 +361,10 @@ form.addEventListener("submit", async (event) => {
         progressDetail.textContent = error.message;
         anotherButton.hidden = false;
         setBusy(false);
+
+        if ((error.message || "").toLowerCase().includes("cookies")) {
+            cookieDetails.open = true;
+        }
     }
 });
 
@@ -272,17 +378,43 @@ pasteButton.addEventListener("click", async () => {
     }
 });
 
+collectionZipToggle.addEventListener("click", () => {
+    setCollectionZip(!packageAsZip);
+});
+
+collectionZipToggle.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setCollectionZip(!packageAsZip);
+    }
+});
+
+cookieFileInput.addEventListener("change", () => {
+    const file = selectedCookieFile();
+    cookieFileLabel.textContent = file ? file.name : "Choose cookies.txt";
+    clearCookieFileButton.hidden = !file;
+});
+
+clearCookieFileButton.addEventListener("click", resetCookieFile);
+
 anotherButton.addEventListener("click", () => {
     stopPolling();
     currentJobId = null;
     jobPanel.hidden = true;
     resetPanel();
+    resetCookieFile();
     urlInput.value = "";
     urlInput.focus();
     window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
 async function initialize() {
+    const savedZipPreference = safeStorageGet("framegrab-package-as-zip");
+    setCollectionZip(
+        savedZipPreference === null ? true : savedZipPreference === "true",
+        false,
+    );
+
     try {
         const response = await fetch("/api/config", { cache: "no-store" });
         if (!response.ok) {
@@ -292,17 +424,19 @@ async function initialize() {
         const config = await response.json();
         authRequired = Boolean(config.auth_required);
         passwordGroup.hidden = !authRequired;
-
-        const savedZipPreference = localStorage.getItem("framegrab-package-as-zip");
-        collectionZipInput.checked = savedZipPreference === null
-            ? true
-            : savedZipPreference === "true";
+        maxCookieFileBytes = Number(config.max_cookie_file_bytes) || maxCookieFileBytes;
 
         if (authRequired) {
-            passwordInput.value = localStorage.getItem("framegrab-password") || "";
+            passwordInput.value = safeStorageGet("framegrab-password") || "";
         }
+
+        if (config.server_cookies_configured) {
+            cookieSummaryText.textContent = "Railway cookies are configured; upload only to override them";
+        }
+
+        initializeAds(config.adsense);
     } catch {
-        // The form will still surface any server-side error when submitted.
+        // The form will surface server-side errors when submitted.
     }
 }
 

@@ -48,7 +48,16 @@ FAILED_JOB_TTL_SECONDS = max(
 ACTIVE_JOB_TIMEOUT_SECONDS = max(
     1800, int(os.getenv("ACTIVE_JOB_TIMEOUT_SECONDS", "21600"))
 )
+MAX_COOKIE_FILE_BYTES = max(
+    1024, int(os.getenv("MAX_COOKIE_FILE_BYTES", str(2 * 1024 * 1024)))
+)
 COOKIE_FILE = DOWNLOAD_ROOT / "youtube-cookies.txt"
+ADSENSE_CLIENT_ID = os.getenv(
+    "ADSENSE_CLIENT_ID", "ca-pub-4820082513371524"
+).strip()
+ADSENSE_HEADER_SLOT = os.getenv("ADSENSE_HEADER_SLOT", "").strip()
+ADSENSE_MIDDLE_SLOT = os.getenv("ADSENSE_MIDDLE_SLOT", "").strip()
+ADSENSE_FOOTER_SLOT = os.getenv("ADSENSE_FOOTER_SLOT", "").strip()
 
 ALLOWED_YOUTUBE_HOSTS = {
     "youtube.com",
@@ -84,6 +93,7 @@ class Job:
     filename: str | None = None
     file_size: int | None = None
     file_path: str | None = None
+    cookie_file_path: str | None = None
     package_as_zip: bool = True
     is_archive: bool = False
     error: str | None = None
@@ -121,6 +131,69 @@ def decode_cookie_file() -> None:
         raise RuntimeError(
             "YOUTUBE_COOKIES_B64 is not valid base64-encoded cookie-file data"
         ) from exc
+
+
+def parse_boolean(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def validate_cookie_upload(filename: str | None, data: bytes) -> bytes:
+    if not data:
+        raise HTTPException(status_code=400, detail="The uploaded cookies.txt file is empty.")
+    if len(data) > MAX_COOKIE_FILE_BYTES:
+        limit_mb = MAX_COOKIE_FILE_BYTES / (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f"The cookies.txt file is larger than the {limit_mb:g} MB limit.",
+        )
+    if b"\x00" in data:
+        raise HTTPException(status_code=400, detail="The cookies file must be plain text.")
+
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="The cookies file must be UTF-8 plain text in Netscape cookies.txt format.",
+        ) from exc
+
+    first_lines = "\n".join(text.splitlines()[:8])
+    if "Netscape HTTP Cookie File" not in first_lines:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "That file is not a Netscape-format cookies.txt export. "
+                "Export cookies.txt from a browser where YouTube is already working."
+            ),
+        )
+
+    lowered = text.lower()
+    if "youtube.com" not in lowered and "google.com" not in lowered:
+        raise HTTPException(
+            status_code=400,
+            detail="The cookies.txt file does not appear to contain YouTube or Google cookies.",
+        )
+
+    if filename and not filename.lower().endswith(".txt"):
+        raise HTTPException(status_code=400, detail="Upload a .txt cookies file.")
+
+    return data
+
+
+def authentication_error_message(message: str) -> str:
+    cleaned = clean_error_message(message)
+    lowered = cleaned.lower()
+    if "sign in to confirm" in lowered or "not a bot" in lowered:
+        return (
+            "YouTube challenged this Railway server. Open YouTube authentication, "
+            "attach a fresh Netscape-format cookies.txt export, and retry. "
+            "You can also configure YOUTUBE_COOKIES_B64 in Railway for server-wide cookies."
+        )
+    return cleaned
 
 
 def normalize_and_validate_youtube_url(raw_url: str) -> str:
@@ -201,6 +274,7 @@ def update_job(job_id: str, **changes: Any) -> None:
 def public_job(job: Job) -> dict[str, Any]:
     payload = asdict(job)
     payload.pop("file_path", None)
+    payload.pop("cookie_file_path", None)
     payload.pop("token", None)
 
     if job.status == "complete":
@@ -367,6 +441,7 @@ def download_job(job_id: str) -> None:
             return
         source_url = job.url
         package_as_zip = job.package_as_zip
+        uploaded_cookie_path = job.cookie_file_path
 
     job_dir = Path(
         tempfile.mkdtemp(prefix=f"{job_id}-", dir=str(DOWNLOAD_ROOT))
@@ -465,8 +540,15 @@ def download_job(job_id: str) -> None:
         "match_filter": match_filter,
     }
 
-    if COOKIE_FILE.exists():
-        options["cookiefile"] = str(COOKIE_FILE)
+    cookie_path: Path | None = None
+    if uploaded_cookie_path:
+        candidate = Path(uploaded_cookie_path)
+        if candidate.is_file():
+            cookie_path = candidate
+    if cookie_path is None and COOKIE_FILE.exists():
+        cookie_path = COOKIE_FILE
+    if cookie_path is not None:
+        options["cookiefile"] = str(cookie_path)
 
     try:
         update_job(
@@ -542,7 +624,7 @@ def download_job(job_id: str) -> None:
             message="The download failed.",
             speed=None,
             eta=None,
-            error=clean_error_message(str(exc)),
+            error=authentication_error_message(str(exc)),
         )
         shutil.rmtree(job_dir, ignore_errors=True)
     except Exception as exc:
@@ -553,9 +635,13 @@ def download_job(job_id: str) -> None:
             message="The download failed.",
             speed=None,
             eta=None,
-            error=clean_error_message(str(exc)),
+            error=authentication_error_message(str(exc)),
         )
         shutil.rmtree(job_dir, ignore_errors=True)
+    finally:
+        if uploaded_cookie_path:
+            Path(uploaded_cookie_path).unlink(missing_ok=True)
+            update_job(job_id, cookie_file_path=None)
 
 
 async def cleanup_loop() -> None:
@@ -586,6 +672,8 @@ async def cleanup_loop() -> None:
         for job in removed_jobs:
             if job.file_path:
                 shutil.rmtree(Path(job.file_path).parent, ignore_errors=True)
+            if job.cookie_file_path:
+                Path(job.cookie_file_path).unlink(missing_ok=True)
 
         with rate_limit_lock:
             cutoff = now - 3600
@@ -617,11 +705,20 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Railway YouTube Downloader",
     description="Downloads the best available YouTube quality up to 1080p and 60 FPS.",
-    version="1.1.0",
+    version="1.4.0",
     lifespan=lifespan,
 )
 
 app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
+
+
+@app.middleware("http")
+async def prevent_stale_frontend_assets(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.exception_handler(HTTPException)
@@ -631,7 +728,19 @@ async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse
 
 @app.get("/", include_in_schema=False)
 async def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
+@app.get("/ads.txt", include_in_schema=False)
+async def ads_txt() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "ads.txt",
+        media_type="text/plain",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @app.get("/health", include_in_schema=False)
@@ -645,6 +754,16 @@ async def config() -> dict[str, Any]:
         "auth_required": bool(APP_PASSWORD),
         "max_duration_seconds": MAX_DURATION_SECONDS,
         "max_concurrent_downloads": MAX_CONCURRENT_DOWNLOADS,
+        "server_cookies_configured": COOKIE_FILE.exists(),
+        "max_cookie_file_bytes": MAX_COOKIE_FILE_BYTES,
+        "adsense": {
+            "client_id": ADSENSE_CLIENT_ID,
+            "slots": {
+                "header": ADSENSE_HEADER_SLOT,
+                "middle": ADSENSE_MIDDLE_SLOT,
+                "footer": ADSENSE_FOOTER_SLOT,
+            },
+        },
     }
 
 
@@ -653,8 +772,33 @@ async def config() -> dict[str, Any]:
     dependencies=[Depends(require_auth)],
     status_code=202,
 )
-async def create_job(payload: CreateJobRequest, request: Request) -> dict[str, Any]:
-    url = normalize_and_validate_youtube_url(payload.url)
+async def create_job(request: Request) -> dict[str, Any]:
+    content_type = request.headers.get("content-type", "").lower()
+    uploaded_cookie_data: bytes | None = None
+    uploaded_cookie_name: str | None = None
+
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        raw_url = str(form.get("url") or "")
+        package_as_zip = parse_boolean(form.get("package_as_zip"), default=True)
+        cookies_file = form.get("cookies_file")
+
+        if cookies_file is not None and hasattr(cookies_file, "read"):
+            uploaded_cookie_name = getattr(cookies_file, "filename", None)
+            uploaded_cookie_data = await cookies_file.read(MAX_COOKIE_FILE_BYTES + 1)
+            uploaded_cookie_data = validate_cookie_upload(
+                uploaded_cookie_name,
+                uploaded_cookie_data,
+            )
+    else:
+        try:
+            payload = CreateJobRequest.model_validate(await request.json())
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid download request.") from exc
+        raw_url = payload.url
+        package_as_zip = payload.package_as_zip
+
+    url = normalize_and_validate_youtube_url(raw_url)
     enforce_rate_limit(client_ip(request))
 
     if active_job_count() >= MAX_QUEUED_JOBS:
@@ -664,17 +808,34 @@ async def create_job(payload: CreateJobRequest, request: Request) -> dict[str, A
         )
 
     job_id = secrets.token_urlsafe(12)
+    cookie_file_path: str | None = None
+
+    if uploaded_cookie_data is not None:
+        upload_path = DOWNLOAD_ROOT / f"{job_id}.cookies.txt"
+        upload_path.write_bytes(uploaded_cookie_data)
+        upload_path.chmod(0o600)
+        cookie_file_path = str(upload_path)
+
     job = Job(
         id=job_id,
         url=url,
         token=secrets.token_urlsafe(24),
-        package_as_zip=payload.package_as_zip,
+        package_as_zip=package_as_zip,
+        cookie_file_path=cookie_file_path,
     )
 
     with jobs_lock:
         jobs[job_id] = job
 
-    executor.submit(download_job, job_id)
+    try:
+        executor.submit(download_job, job_id)
+    except Exception:
+        if cookie_file_path:
+            Path(cookie_file_path).unlink(missing_ok=True)
+        with jobs_lock:
+            jobs.pop(job_id, None)
+        raise
+
     return public_job(job)
 
 

@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <meta name="description" content="Download the best available YouTube quality up to 1080p and 60 FPS.">
+    <meta name="google-adsense-account" content="ca-pub-4820082513371524">
     <title>FrameGrab — YouTube Downloader</title>
-    <link rel="stylesheet" href="/assets/styles.css">
+    <link rel="stylesheet" href="/assets/styles.css?v=1.4.0">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4820082513371524" crossorigin="anonymous"></script>
 </head>
 <body>
     <div class="background-orb orb-one" aria-hidden="true"></div>
@@ -26,6 +28,11 @@
             </div>
         </header>
 
+        <section id="ad-placement-header" class="ad-placement ad-placement-header" hidden aria-label="Advertisement">
+            <span class="ad-label">Advertisement</span>
+            <div id="ad-header" class="ad-mount"></div>
+        </section>
+
         <section class="hero" aria-labelledby="hero-title">
             <div class="hero-copy">
                 <p class="badge">
@@ -40,7 +47,7 @@
             </div>
 
             <form id="download-form" class="download-card" novalidate>
-                <label for="youtube-url">YouTube URL</label>
+                <label class="field-label" for="youtube-url">YouTube URL</label>
                 <div class="input-row">
                     <input
                         id="youtube-url"
@@ -55,7 +62,7 @@
                 </div>
 
                 <div id="password-group" class="password-group" hidden>
-                    <label for="app-password">App password</label>
+                    <label class="field-label" for="app-password">App password</label>
                     <input
                         id="app-password"
                         name="password"
@@ -65,18 +72,82 @@
                     >
                 </div>
 
-                <label class="collection-option" for="collection-zip">
-                    <span class="collection-badge" aria-hidden="true">ZIP</span>
-                    <span class="collection-copy">
-                        <strong>Collection-ready download</strong>
-                        <span>Wrap the video in a matching named folder, then download the whole thing as a ZIP.</span>
-                        <span class="collection-path">Video Name.zip / Video Name / Video Name.mp4</span>
-                    </span>
-                    <span class="toggle-control">
-                        <input id="collection-zip" type="checkbox" checked>
-                        <span class="toggle-track" aria-hidden="true"></span>
-                    </span>
-                </label>
+                <div class="settings-panel">
+                    <div class="setting-row">
+                        <span class="setting-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M6.75 3.75h7.19l3.31 3.31v13.19H6.75V3.75Z"/>
+                                <path d="M13.75 3.75v3.5h3.5M10 8h2m-2 3h2m-2 3h2m-2 3h2"/>
+                            </svg>
+                        </span>
+                        <span class="setting-copy">
+                            <strong>Collection ZIP</strong>
+                            <span>Folder and video packed together for your collection</span>
+                        </span>
+                        <button
+                            id="collection-zip-toggle"
+                            class="switch-button"
+                            type="button"
+                            role="switch"
+                            aria-checked="true"
+                            aria-label="Package the video in a collection ZIP"
+                        >
+                            <span class="switch-knob" aria-hidden="true"></span>
+                        </button>
+                    </div>
+
+                    <div id="collection-preview" class="collection-preview">
+                        <span>Video Name.zip</span>
+                        <span aria-hidden="true">›</span>
+                        <span>Video Name</span>
+                        <span aria-hidden="true">›</span>
+                        <span>Video Name.mp4</span>
+                    </div>
+
+                    <details id="cookie-details" class="cookie-details">
+                        <summary>
+                            <span class="setting-icon auth-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M8.25 10.25V7.5a3.75 3.75 0 0 1 7.5 0v2.75"/>
+                                    <rect x="5.5" y="10.25" width="13" height="10" rx="2.25"/>
+                                    <path d="M12 14.1v2.4"/>
+                                </svg>
+                            </span>
+                            <span class="setting-copy">
+                                <strong>YouTube authentication</strong>
+                                <span id="cookie-summary-text">Only needed for “confirm you’re not a bot” errors</span>
+                            </span>
+                            <span class="details-chevron" aria-hidden="true">⌄</span>
+                        </summary>
+
+                        <div class="cookie-body">
+                            <p>
+                                Railway cannot read Chrome or Firefox on your computer. Export a fresh
+                                Netscape-format <code>cookies.txt</code> from a browser where YouTube works,
+                                then attach it for this download.
+                            </p>
+
+                            <div class="cookie-file-row">
+                                <label class="file-picker" for="youtube-cookies-file">
+                                    <input
+                                        id="youtube-cookies-file"
+                                        name="cookies_file"
+                                        type="file"
+                                        accept=".txt,text/plain"
+                                    >
+                                    <span class="file-picker-label" id="cookie-file-label">Choose cookies.txt</span>
+                                    <span class="file-picker-action">Browse</span>
+                                </label>
+                                <button id="clear-cookie-file" class="clear-file-button" type="button" hidden>Clear</button>
+                            </div>
+
+                            <p class="privacy-note">
+                                The cookie file is stored temporarily, used only by yt-dlp for this job,
+                                and deleted as soon as the job finishes or fails.
+                            </p>
+                        </div>
+                    </details>
+                </div>
 
                 <button id="submit-button" class="primary-button" type="submit">
                     <span class="button-label">Prepare download</span>
@@ -87,6 +158,11 @@
                     Single videos only. No upscaling, frame interpolation, or playlist downloading.
                 </p>
             </form>
+        </section>
+
+        <section id="ad-placement-middle" class="ad-placement ad-placement-middle" hidden aria-label="Advertisement">
+            <span class="ad-label">Advertisement</span>
+            <div id="ad-middle" class="ad-mount"></div>
         </section>
 
         <section id="job-panel" class="job-panel" hidden aria-live="polite">
@@ -146,8 +222,13 @@
             <article>
                 <span class="feature-number">03</span>
                 <h3>Collection-ready ZIPs</h3>
-                <p>Optionally wraps each video in a folder named after the video, then downloads it as a ZIP.</p>
+                <p>Wraps each video in a matching named folder, then downloads it as a ZIP.</p>
             </article>
+        </section>
+
+        <section id="ad-placement-footer" class="ad-placement ad-placement-footer" hidden aria-label="Advertisement">
+            <span class="ad-label">Advertisement</span>
+            <div id="ad-footer" class="ad-mount"></div>
         </section>
 
         <footer>
@@ -155,6 +236,6 @@
         </footer>
     </main>
 
-    <script src="/assets/app.js" defer></script>
+    <script src="/assets/app.js?v=1.4.0" defer></script>
 </body>
 </html>
