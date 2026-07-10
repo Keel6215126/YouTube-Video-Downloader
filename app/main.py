@@ -79,6 +79,15 @@ YOUTUBE_SLEEP_REQUESTS_SECONDS = max(
 YOUTUBE_JOB_SPACING_SECONDS = max(
     0.0, float(os.getenv("YOUTUBE_JOB_SPACING_SECONDS", "6"))
 )
+COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS = max(
+    1, int(os.getenv("COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS", "4"))
+)
+COOKIE_SLEEP_REQUESTS_SECONDS = max(
+    0.0, float(os.getenv("COOKIE_SLEEP_REQUESTS_SECONDS", "0.25"))
+)
+NO_COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS = max(
+    1, int(os.getenv("NO_COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS", "1"))
+)
 
 ALLOWED_YOUTUBE_HOSTS = {
     "youtube.com",
@@ -118,6 +127,7 @@ class Job:
     package_as_zip: bool = True
     is_archive: bool = False
     auth_mode: str | None = None
+    concurrent_fragments: int | None = None
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -602,6 +612,8 @@ def download_job(job_id: str) -> None:
     temp_dir = job_dir / "working"
     temp_dir.mkdir(parents=True, exist_ok=True)
 
+    fragment_count = NO_COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS
+    request_sleep_seconds = YOUTUBE_SLEEP_REQUESTS_SECONDS
     logger = JobLogger(job_id)
 
     def progress_hook(data: dict[str, Any]) -> None:
@@ -616,7 +628,11 @@ def download_job(job_id: str) -> None:
                 job_id,
                 status="downloading",
                 progress=round(visible_progress, 1),
-                message="Downloading the best available video and audio streams…",
+                message=(
+                    f"Downloading with {fragment_count} parallel fragments…"
+                    if fragment_count > 1
+                    else "Downloading the best available video and audio streams…"
+                ),
                 speed=format_speed(data.get("speed")),
                 eta=data.get("eta"),
             )
@@ -678,8 +694,8 @@ def download_job(job_id: str) -> None:
         },
         "merge_output_format": "mp4",
         "noplaylist": True,
-        "concurrent_fragment_downloads": 1,
-        "sleep_interval_requests": YOUTUBE_SLEEP_REQUESTS_SECONDS,
+        "concurrent_fragment_downloads": fragment_count,
+        "sleep_interval_requests": request_sleep_seconds,
         "retries": 10,
         "fragment_retries": 10,
         "file_access_retries": 3,
@@ -704,6 +720,8 @@ def download_job(job_id: str) -> None:
     if cookie_path is not None:
         options["cookiefile"] = str(cookie_path)
         auth_mode = "cookies"
+        fragment_count = COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS
+        request_sleep_seconds = COOKIE_SLEEP_REQUESTS_SECONDS
     elif PO_TOKEN_PROVIDER_ENABLED and pot_provider_ready:
         options["extractor_args"] = {
             "youtube": {
@@ -714,10 +732,20 @@ def download_job(job_id: str) -> None:
             },
         }
         auth_mode = "po_token"
+        fragment_count = NO_COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS
+        request_sleep_seconds = YOUTUBE_SLEEP_REQUESTS_SECONDS
     else:
         auth_mode = "guest"
+        fragment_count = NO_COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS
+        request_sleep_seconds = YOUTUBE_SLEEP_REQUESTS_SECONDS
 
-    update_job(job_id, auth_mode=auth_mode)
+    options["concurrent_fragment_downloads"] = fragment_count
+    options["sleep_interval_requests"] = request_sleep_seconds
+    update_job(
+        job_id,
+        auth_mode=auth_mode,
+        concurrent_fragments=fragment_count,
+    )
 
     try:
         wait_for_youtube_job_spacing(job_id)
@@ -728,7 +756,8 @@ def download_job(job_id: str) -> None:
             )
         elif auth_mode == "cookies":
             analyzing_message = (
-                "Using YouTube authentication and selecting up to 1080p60…"
+                "Fast authenticated mode: selecting up to 1080p60 "
+                f"with {fragment_count} parallel fragments…"
             )
         else:
             analyzing_message = (
@@ -891,7 +920,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Railway YouTube Downloader",
     description="Downloads the best available YouTube quality up to 1080p and 60 FPS.",
-    version="1.5.0",
+    version="1.6.0",
     lifespan=lifespan,
 )
 
@@ -949,6 +978,16 @@ async def config() -> dict[str, Any]:
         "max_concurrent_downloads": MAX_CONCURRENT_DOWNLOADS,
         "server_cookies_configured": COOKIE_FILE.exists(),
         "max_cookie_file_bytes": MAX_COOKIE_FILE_BYTES,
+        "download_modes": {
+            "cookies": {
+                "concurrent_fragments": COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS,
+                "request_delay_seconds": COOKIE_SLEEP_REQUESTS_SECONDS,
+            },
+            "without_cookies": {
+                "concurrent_fragments": NO_COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS,
+                "request_delay_seconds": YOUTUBE_SLEEP_REQUESTS_SECONDS,
+            },
+        },
         "po_token_provider": {
             "enabled": PO_TOKEN_PROVIDER_ENABLED,
             "ready": pot_provider_ready,

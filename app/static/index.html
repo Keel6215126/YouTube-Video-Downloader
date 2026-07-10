@@ -7,7 +7,7 @@
     <meta name="description" content="Download the best available YouTube quality up to 1080p and 60 FPS.">
     <meta name="google-adsense-account" content="ca-pub-4820082513371524">
     <title>FrameGrab — YouTube Downloader</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=1.5.0">
+    <link rel="stylesheet" href="/assets/styles.css?v=1.6.0">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4820082513371524" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -128,8 +128,14 @@
                             <p>
                                 Railway cannot read Chrome or Firefox on your computer. Export a fresh
                                 Netscape-format <code>cookies.txt</code> from a browser where YouTube works,
-                                then attach it for this download.
+                                then attach it here. Cookie-authenticated downloads automatically use
+                                <strong>four parallel fragments</strong> for much faster transfers.
                             </p>
+
+                            <div class="fast-mode-chip" aria-label="Authenticated fast mode">
+                                <span aria-hidden="true">⚡</span>
+                                Cookies selected = fast 4-part mode
+                            </div>
 
                             <div class="cookie-file-row">
                                 <label class="file-picker" for="youtube-cookies-file">
@@ -240,6 +246,6 @@
         </footer>
     </main>
 
-    <script src="/assets/app.js?v=1.5.0" defer></script>
+    <script src="/assets/app.js?v=1.6.0" defer></script>
 </body>
 </html>

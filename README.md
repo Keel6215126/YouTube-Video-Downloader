@@ -73,6 +73,9 @@ Railway automatically detects the root `Dockerfile`. The included
 | `FAILED_JOB_TTL_SECONDS` | `900` | Failed-job status lifetime |
 | `ACTIVE_JOB_TIMEOUT_SECONDS` | `21600` | Maximum active-job age |
 | `YOUTUBE_COOKIES_B64` | empty | Optional server-wide base64 cookies file |
+| `COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS` | `4` | Parallel fragments when cookies are used |
+| `COOKIE_SLEEP_REQUESTS_SECONDS` | `0.25` | Request delay in authenticated mode |
+| `NO_COOKIE_CONCURRENT_FRAGMENT_DOWNLOADS` | `1` | Conservative fragment count without cookies |
 | `MAX_COOKIE_FILE_BYTES` | `2097152` | Per-download cookies upload size limit |
 | `ADSENSE_CLIENT_ID` | `ca-pub-4820082513371524` | AdSense publisher client ID |
 | `ADSENSE_HEADER_SLOT` | empty | Responsive ad unit below the header |

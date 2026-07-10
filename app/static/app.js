@@ -35,6 +35,9 @@ let packageAsZip = true;
 let currentJobId = null;
 let pollTimer = null;
 let maxCookieFileBytes = 2 * 1024 * 1024;
+let serverCookiesConfigured = false;
+let automaticProtectionSummary = "Automatic protection first; cookies only as a fallback";
+let cookieFragmentCount = 4;
 
 function authHeaders() {
     const headers = {};
@@ -240,6 +243,22 @@ async function pollJob() {
     }
 }
 
+function updateCookieSummary() {
+    if (selectedCookieFile()) {
+        cookieSummaryText.textContent =
+            `cookies.txt selected · fast ${cookieFragmentCount}-part mode`;
+        return;
+    }
+
+    if (serverCookiesConfigured) {
+        cookieSummaryText.textContent =
+            `Railway cookies configured · fast ${cookieFragmentCount}-part mode`;
+        return;
+    }
+
+    cookieSummaryText.textContent = automaticProtectionSummary;
+}
+
 function selectedCookieFile() {
     return cookieFileInput.files && cookieFileInput.files.length > 0
         ? cookieFileInput.files[0]
@@ -250,6 +269,7 @@ function resetCookieFile() {
     cookieFileInput.value = "";
     cookieFileLabel.textContent = "Choose cookies.txt";
     clearCookieFileButton.hidden = true;
+    updateCookieSummary();
 }
 
 async function startDownload(url) {
@@ -395,6 +415,7 @@ cookieFileInput.addEventListener("change", () => {
     const file = selectedCookieFile();
     cookieFileLabel.textContent = file ? file.name : "Choose cookies.txt";
     clearCookieFileButton.hidden = !file;
+    updateCookieSummary();
 });
 
 clearCookieFileButton.addEventListener("click", resetCookieFile);
@@ -432,31 +453,31 @@ async function initialize() {
             poTokenStatus.className = "protection-status ready";
             poTokenStatusText.textContent =
                 "Automatic PO-token protection is active on this server.";
-            cookieSummaryText.textContent =
+            automaticProtectionSummary =
                 "Automatic protection active; cookies only as a fallback";
         } else if (poTokenProvider.enabled) {
             poTokenStatus.className = "protection-status unavailable";
             poTokenStatusText.textContent =
                 "Automatic protection did not start. Cookies may be required.";
-            cookieSummaryText.textContent =
+            automaticProtectionSummary =
                 "Automatic protection unavailable; cookies may be required";
         } else {
             poTokenStatus.className = "protection-status unavailable";
             poTokenStatusText.textContent =
                 "Automatic PO-token protection is disabled.";
-            cookieSummaryText.textContent =
+            automaticProtectionSummary =
                 "Automatic protection disabled; cookies may be required";
         }
         maxCookieFileBytes = Number(config.max_cookie_file_bytes) || maxCookieFileBytes;
+        serverCookiesConfigured = Boolean(config.server_cookies_configured);
+        cookieFragmentCount =
+            Number(config.download_modes?.cookies?.concurrent_fragments) || cookieFragmentCount;
 
         if (authRequired) {
             passwordInput.value = safeStorageGet("framegrab-password") || "";
         }
 
-        if (config.server_cookies_configured) {
-            cookieSummaryText.textContent = "Railway cookies are configured; upload only to override them";
-        }
-
+        updateCookieSummary();
         initializeAds(config.adsense);
     } catch {
         // The form will surface server-side errors when submitted.

@@ -491,6 +491,21 @@ input[type="password"]:focus {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+
+.fast-mode-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0 0 12px;
+    padding: 7px 10px;
+    border: 1px solid rgba(100, 230, 173, 0.16);
+    border-radius: 999px;
+    color: #b8f5d8;
+    background: rgba(100, 230, 173, 0.055);
+    font-size: 0.68rem;
+    font-weight: 760;
+}
+
 .cookie-file-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
